@@ -114,7 +114,7 @@ Resources:
           # Do not add any spaces between your link and the "=", otherwise it won't work. EG: MINECRAFTSERVERURL=https://urlexample
           
           
-          MINECRAFTSERVERURL=
+          MINECRAFTSERVERURL=https://api.papermc.io/v2/projects/paper/versions/1.21/builds/111/downloads/paper-1.21-111.jar
           
           
           # Download Java
@@ -126,10 +126,21 @@ Resources:
           cd /opt/minecraft/server
           
           # Download server jar file from Minecraft official website
-          wget $MINECRAFTSERVERURL
+          wget -O server.jar $MINECRAFTSERVERURL
           
           # Generate Minecraft server files and create script
           chown -R minecraft:minecraft /opt/minecraft/
+          
+          #Download plugins
+          mkdir /opt/minecraft/server/plugins
+          cd /opt/minecraft/server/plugins
+
+          wget https://download.luckperms.net/1552/bukkit/loader/LuckPerms-Bukkit-5.4.137.jar
+          wget https://github.com/EssentialsX/Essentials/releases/download/2.20.1/EssentialsX-2.20.1.jar
+          wget https://dev.bukkit.org/projects/vault/files/latest
+
+          # go back to initialize server
+          cd /opt/minecraft/server
           java -Xmx1300M -Xms1300M -jar server.jar nogui
           sleep 40
           sed -i 's/false/true/p' eula.txt
