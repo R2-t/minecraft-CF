@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Minecraft VPC for minecraft server
+
+Parameters:
+  EnvName: 
+    Description: An environmnet name that is prefixed to resources name
+    Type: String
+
+  VpcCIDR:
+    Description: IP range for VPC 
+    Type: String
+    Default: 10.128.0.0/23
+
+  PublicSubnetCIDR:
+    Description: IP range for public subnet
+    Type: String
+    Default: 10.128.1.0/24
+
+  PrivateSubnetCIDR:
+    Description: IP range for private subnet
+    Type: String
+    Default: 10.128.0.0/24
+
+Resources:
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MinecraftVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvName}-PublicRouteTable-Minecraft"
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MinecraftVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvName}-PrivateRouteTable-Minecraft"
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: !Sub "${EnvName}-InternetGateway-Minecraft"
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MinecraftVPC
+      InternetGatewayId: !Ref InternetGateway
+  MinecraftVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvName}-MinecraftVPC"
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MinecraftVPC
+      CidrBlock: !Ref PrivateSubnetCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvName}-Minecraft-PrivateSubnet"
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MinecraftVPC
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvName}-Minecraft-PublicSubnet"
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+
+Outputs:
+  MinecraftVPC:
+    Description: Minecraft VPC ID
+    Value: !Ref MinecraftVPC
+    Export:
+      Name: MinecraftVPC
+  MinecraftPrivateSubnet:
+    Description: Minecraft private subnet ID
+    Value: !Ref PrivateSubnet
+    Export:
+      Name: MinecraftPrivateSubnet
+  MinecraftPublicSubnet:
+    Description: Minecraft public subnet ID
+    Value: !Ref PublicSubnet
+    Export:
+      Name: MinecraftPublicSubnet
+  MinecraftInternetGateway:
+    Description: Minecraft internet gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: MinecraftInternetGateway

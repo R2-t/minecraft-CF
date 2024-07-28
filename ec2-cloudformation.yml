@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Minecraft EC2 for minecraft server
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: String
+
+Mappings:
+  RegionMap:
+    us-east-2:
+      AMI: ami-0fb5231409345e557
+
+Resources:
+  ControlPortAddress:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+  AssociateControlPort:
+    Type: 'AWS::EC2::EIPAssociation'
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - ControlPortAddress
+          - AllocationId
+      NetworkInterfaceId:
+        Ref: controlXface
+  WebPortAddress:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+  AssociateWebPort:
+    Type: 'AWS::EC2::EIPAssociation'
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - WebPortAddress
+          - AllocationId
+      NetworkInterfaceId:
+        Ref: webXface
+  SSHSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !ImportValue MinecraftVPC
+      GroupDescription: Enable SSH access via port 22
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+  MinecraftSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !ImportValue MinecraftVPC
+      GroupDescription: Enable Minecraft port access via user-defined port
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 25565 
+          IpProtocol: tcp
+          ToPort: 25565 
+  controlXface:
+    Type: 'AWS::EC2::NetworkInterface'
+    Properties:
+      SubnetId: !ImportValue MinecraftPublicSubnet
+      Description: Interface for controlling traffic such as SSH
+      GroupSet:
+        - Fn::GetAtt:
+            - SSHSecurityGroup
+            - GroupId
+      SourceDestCheck: true
+      Tags:
+        - Key: Network
+          Value: Control
+  webXface:
+    Type: 'AWS::EC2::NetworkInterface'
+    Properties:
+      SubnetId: !ImportValue MinecraftPublicSubnet
+      Description: Interface for minecraft port traffic
+      GroupSet:
+        - Fn::GetAtt:
+            - MinecraftSecurityGroup
+            - GroupId
+      SourceDestCheck: true
+      Tags:
+        - Key: Network
+          Value: Web
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t4g.large
+      ImageId:
+        Fn::FindInMap:
+          - RegionMap
+          - Ref: AWS::Region
+          - AMI
+      KeyName:
+        Ref: KeyName
+      NetworkInterfaces:
+        - NetworkInterfaceId:
+            Ref: controlXface
+          DeviceIndex: "0"
+        - NetworkInterfaceId:
+            Ref: webXface
+          DeviceIndex: "1"
+      Tags:
+        - Key: Role
+          Value: Test Instance
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          
+          # *** INSERT SERVER DOWNLOAD URL BELOW ***
+          # Do not add any spaces between your link and the "=", otherwise it won't work. EG: MINECRAFTSERVERURL=https://urlexample
+          
+          
+          MINECRAFTSERVERURL=
+          
+          
+          # Download Java
+          sudo yum install -y java-21-amazon-corretto-headless
+          # Install MC Java server in a directory we create
+          adduser minecraft
+          mkdir /opt/minecraft/
+          mkdir /opt/minecraft/server/
+          cd /opt/minecraft/server
+          
+          # Download server jar file from Minecraft official website
+          wget $MINECRAFTSERVERURL
+          
+          # Generate Minecraft server files and create script
+          chown -R minecraft:minecraft /opt/minecraft/
+          java -Xmx1300M -Xms1300M -jar server.jar nogui
+          sleep 40
+          sed -i 's/false/true/p' eula.txt
+          touch start
+          printf '#!/bin/bash\njava -Xmx1300M -Xms1300M -jar server.jar nogui\n' >> start
+          chmod +x start
+          sleep 1
+          touch stop
+          printf '#!/bin/bash\nkill -9 $(ps -ef | pgrep -f "java")' >> stop
+          chmod +x stop
+          sleep 1
+          
+          # Create SystemD Script to run Minecraft server jar on reboot
+          cd /etc/systemd/system/
+          touch minecraft.service
+          printf '[Unit]\nDescription=Minecraft Server on start up\nWants=network-online.target\n[Service]\nUser=minecraft\nWorkingDirectory=/opt/minecraft/server\nExecStart=/opt/minecraft/server/start\nStandardInput=null\n[Install]\nWantedBy=multi-user.target' >> minecraft.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable minecraft.service
+          sudo systemctl start minecraft.service
+          
+          # End script:
+Outputs:
+  InstancePublicIp:
+    Description: Public IP Address of the EC2 Instance
+    Value:
+      Fn::GetAtt:
+        - Ec2Instance
+        - PublicIp
