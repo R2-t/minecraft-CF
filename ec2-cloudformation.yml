@@ -104,8 +104,8 @@ Resources:
             Ref: webXface
           DeviceIndex: "1"
       Tags:
-        - Key: Role
-          Value: Test Instance
+        - Key: Project
+          Value: MinecraftInstance
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
